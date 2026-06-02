@@ -412,6 +412,128 @@ header {
 .layer-delete:hover { color: var(--red); background: rgba(240, 90, 90, 0.1); }
 .layer-delete svg { width: 12px; height: 12px; }
 
+/* Lock button */
+.layer-lock {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+.layer-lock:hover { color: var(--amber); background: rgba(240,180,41,0.1); }
+.layer-lock.locked { color: var(--amber); opacity: 1; }
+.layer-lock svg { width: 12px; height: 12px; }
+.layer-item.locked-layer { opacity: 0.6; }
+.layer-item.locked-layer .layer-name { text-decoration: line-through; text-decoration-color: var(--text3); }
+
+/* Adjustments panel */
+.adj-section {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adj-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.adj-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  width: 52px;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+.adj-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface3);
+  outline: none;
+  cursor: pointer;
+}
+
+.adj-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+}
+
+.adj-val {
+  font-size: 10px;
+  color: var(--text2);
+  width: 30px;
+  text-align: right;
+  font-family: 'Space Grotesk', monospace;
+  flex-shrink: 0;
+}
+
+.adj-reset {
+  width: 100%;
+  padding: 6px;
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text3);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.adj-reset:hover { background: var(--surface2); color: var(--text2); border-color: var(--border2); }
+
+.no-adj {
+  padding: 14px 16px;
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* Collapsible section header */
+.section-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s;
+}
+.section-toggle:hover { color: var(--text2); }
+.section-toggle .chevron {
+  transition: transform 0.2s;
+  font-size: 9px;
+  color: var(--text3);
+}
+.section-toggle.open .chevron { transform: rotate(180deg); }
+.section-body { overflow: hidden; transition: max-height 0.25s ease; }
+
 /* Properties panel */
 .props-area {
   padding: 12px 16px;
@@ -1071,6 +1193,19 @@ header {
       </div>
     </div>
 
+    <!-- Image Adjustments -->
+    <div class="panel-section" id="adj-section-wrap">
+      <div class="section-toggle open" id="adj-toggle" onclick="toggleAdjSection()">
+        Ajustes de imagen
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body" id="adj-body" style="max-height:400px">
+        <div id="adj-panel">
+          <p class="no-adj">Selecciona una imagen para ajustar sus filtros.</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1434,6 +1569,13 @@ function sendBackward() {
 }
 
 // ─── LAYERS PANEL ──────────────────────────────────────────
+const LOCK_SVG_LOCKED = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+</svg>`;
+const LOCK_SVG_UNLOCKED = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/>
+</svg>`;
+
 function refreshLayers() {
   const list = document.getElementById('layers-list');
   const objs = canvas.getObjects();
@@ -1450,7 +1592,8 @@ function refreshLayers() {
     const ri = objs.length - 1 - vi;
     const item = document.createElement('div');
     const isActive = (obj === active);
-    item.className = 'layer-item' + (isActive ? ' selected' : '');
+    const isLocked = !!obj._locked;
+    item.className = 'layer-item' + (isActive ? ' selected' : '') + (isLocked ? ' locked-layer' : '');
 
     const lt = obj._layerType || 'bg';
     const icons = { bg: '🖼', ai: '✦', text: 'T' };
@@ -1467,13 +1610,20 @@ function refreshLayers() {
         <div class="layer-type">${lt === 'ai' ? 'Extracción IA' : lt === 'text' ? 'Texto editable' : 'Imagen'}</div>
       </div>
       ${badges[lt] || ''}
+      <button class="layer-lock ${isLocked ? 'locked' : ''}" title="${isLocked ? 'Desbloquear capa' : 'Bloquear capa'}"
+        onclick="toggleLock(${ri}, event)">
+        ${isLocked ? LOCK_SVG_LOCKED : LOCK_SVG_UNLOCKED}
+      </button>
       <button class="layer-delete" onclick="removeLayer(${ri}, event)" title="Eliminar capa">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
         </svg>
       </button>
     `;
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      // Don't select if clicking lock/delete buttons
+      if (e.target.closest('.layer-lock') || e.target.closest('.layer-delete')) return;
+      if (isLocked) { toast('Capa bloqueada — desbloquea primero', 'info'); return; }
       canvas.setActiveObject(obj);
       canvas.renderAll();
       refreshLayers();
@@ -1482,10 +1632,27 @@ function refreshLayers() {
   });
 }
 
+window.toggleLock = function(idx, e) {
+  e.stopPropagation();
+  const o = canvas.item(idx);
+  if (!o) return;
+  o._locked = !o._locked;
+  // Fabric.js: selectable + evented = false when locked
+  o.set({ selectable: !o._locked, evented: !o._locked, hasControls: !o._locked, hasBorders: !o._locked });
+  if (o._locked && canvas.getActiveObject() === o) canvas.discardActiveObject();
+  canvas.renderAll();
+  refreshLayers();
+  toast(o._locked ? 'Capa bloqueada 🔒' : 'Capa desbloqueada 🔓', 'info');
+};
+
 window.removeLayer = (idx, e) => {
   e.stopPropagation();
   const o = canvas.item(idx);
-  if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.renderAll(); }
+  if (!o) return;
+  if (o._locked) { toast('Desbloquea la capa antes de eliminarla', 'error'); return; }
+  canvas.remove(o);
+  canvas.discardActiveObject();
+  canvas.renderAll();
 };
 
 // ─── PROPERTIES PANEL ──────────────────────────────────────
@@ -1495,6 +1662,7 @@ function onSelect() {
   const panel = document.getElementById('props-panel');
 
   const isText = obj.type === 'i-text' || obj.type === 'text';
+  const isImage = obj.type === 'image';
   const x = Math.round(obj.left || 0);
   const y = Math.round(obj.top || 0);
   const w = Math.round((obj.width || 0) * (obj.scaleX || 1));
@@ -1532,11 +1700,17 @@ function onSelect() {
       </div>` : ''}
     </div>
   `;
+
+  // Update adjustments panel
+  if (isImage) renderAdjPanel(obj);
+  else document.getElementById('adj-panel').innerHTML = '<p class="no-adj">Solo disponible para capas de imagen.</p>';
+
   refreshLayers();
 }
 
 function onDeselect() {
   document.getElementById('props-panel').innerHTML = '<p class="no-selection">Selecciona un elemento para ajustar sus propiedades.</p>';
+  document.getElementById('adj-panel').innerHTML = '<p class="no-adj">Selecciona una imagen para ajustar sus filtros.</p>';
   refreshLayers();
 }
 
@@ -1553,6 +1727,83 @@ function setWH(axis, val) {
   if (axis === 'w') o.scaleX = val / o.width;
   else o.scaleY = val / o.height;
   canvas.renderAll();
+}
+
+// ─── IMAGE ADJUSTMENTS ─────────────────────────────────────
+// Per-object filter state stored on _adj
+const ADJ_DEFAULTS = { brightness: 0, contrast: 0, saturation: 0, hue: 0, blur: 0, noise: 0 };
+
+function getAdj(obj) {
+  if (!obj._adj) obj._adj = { ...ADJ_DEFAULTS };
+  return obj._adj;
+}
+
+function renderAdjPanel(obj) {
+  const adj = getAdj(obj);
+  const sliders = [
+    { key: 'brightness', label: 'Brillo',      min: -1,   max: 1,   step: 0.01,  unit: '' },
+    { key: 'contrast',   label: 'Contraste',   min: -1,   max: 1,   step: 0.01,  unit: '' },
+    { key: 'saturation', label: 'Saturación',  min: -1,   max: 1,   step: 0.01,  unit: '' },
+    { key: 'hue',        label: 'Tono',         min: -2,   max: 2,   step: 0.01,  unit: '' },
+    { key: 'blur',       label: 'Desenfoque',  min: 0,    max: 1,   step: 0.01,  unit: '' },
+    { key: 'noise',      label: 'Ruido',        min: 0,    max: 600, step: 1,     unit: '' },
+  ];
+
+  const html = `<div class="adj-section">
+    ${sliders.map(s => {
+      const val = adj[s.key] ?? 0;
+      const display = s.step < 1 ? val.toFixed(2) : Math.round(val);
+      return `<div class="adj-row">
+        <span class="adj-label">${s.label}</span>
+        <input type="range" class="adj-slider"
+          min="${s.min}" max="${s.max}" step="${s.step}" value="${val}"
+          oninput="applyAdj('${s.key}', +this.value); document.getElementById('adj-v-${s.key}').textContent=parseFloat(this.value).toFixed(${s.step<1?2:0})">
+        <span class="adj-val" id="adj-v-${s.key}">${display}</span>
+      </div>`;
+    }).join('')}
+    <button class="adj-reset" onclick="resetAdj()">↺ Restablecer ajustes</button>
+  </div>`;
+
+  document.getElementById('adj-panel').innerHTML = html;
+}
+
+function applyAdj(key, val) {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'image') return;
+  const adj = getAdj(obj);
+  adj[key] = val;
+
+  // Rebuild filters from scratch each time
+  const filters = [];
+  if (adj.brightness !== 0) filters.push(new fabric.Image.filters.Brightness({ brightness: adj.brightness }));
+  if (adj.contrast   !== 0) filters.push(new fabric.Image.filters.Contrast({ contrast: adj.contrast }));
+  if (adj.saturation !== 0) filters.push(new fabric.Image.filters.Saturation({ saturation: adj.saturation }));
+  if (adj.hue        !== 0) filters.push(new fabric.Image.filters.HueRotation({ rotation: adj.hue }));
+  if (adj.blur       > 0)   filters.push(new fabric.Image.filters.Blur({ blur: adj.blur }));
+  if (adj.noise      > 0)   filters.push(new fabric.Image.filters.Noise({ noise: adj.noise }));
+
+  obj.filters = filters;
+  obj.applyFilters();
+  canvas.renderAll();
+}
+
+function resetAdj() {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'image') return;
+  obj._adj = { ...ADJ_DEFAULTS };
+  obj.filters = [];
+  obj.applyFilters();
+  canvas.renderAll();
+  renderAdjPanel(obj);
+  toast('Ajustes restablecidos', 'info');
+}
+
+function toggleAdjSection() {
+  const toggle = document.getElementById('adj-toggle');
+  const body = document.getElementById('adj-body');
+  const isOpen = toggle.classList.contains('open');
+  toggle.classList.toggle('open', !isOpen);
+  body.style.maxHeight = isOpen ? '0' : '400px';
 }
 
 // ─── ZOOM ──────────────────────────────────────────────────
