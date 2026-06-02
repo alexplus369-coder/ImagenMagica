@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magic Layers — AI Layer Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<style>
+:root {
+  --bg: #0e0e12;
+  --surface: #16161c;
+  --surface2: #1e1e28;
+  --surface3: #252530;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0f0f5;
+  --text2: #9090a8;
+  --text3: #5a5a72;
+  --accent: #7c6af7;
+  --accent2: #a99df9;
+  --accent-bg: rgba(124,106,247,0.12);
+  --accent-border: rgba(124,106,247,0.3);
+  --green: #3ecf8e;
+  --red: #f05a5a;
+  --amber: #f0b429;
+  --panel-w: 260px;
+  --toolbar-w: 64px;
+  --header-h: 52px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.3px;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #7c6af7, #c080ff);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.logo span { color: var(--accent2); }
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+
+.btn-ghost:hover {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { background: #6a58e5; }
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── LAYOUT ── */
+.workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── LEFT TOOLBAR ── */
+.toolbar {
+  width: var(--toolbar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tool {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text3);
+  border: 1px solid transparent;
+  background: transparent;
+  gap: 2px;
+  padding: 0;
+}
+
+.tool:hover {
+  background: var(--surface2);
+  color: var(--text2);
+  border-color: var(--border);
+}
+
+.tool.active, .tool:active {
+  background: var(--accent-bg);
+  color: var(--accent2);
+  border-color: var(--accent-border);
+}
+
+.tool svg { width: 18px; height: 18px; }
+.tool-label { font-size: 9px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
+
+.tool-sep {
+  width: 32px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ── CANVAS AREA ── */
+.canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-frame {
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 32px 64px rgba(0,0,0,0.6);
+}
+
+.canvas-bg-pattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, #1a1a24 25%, transparent 25%),
+    linear-gradient(-45deg, #1a1a24 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1a1a24 75%),
+    linear-gradient(-45deg, transparent 75%, #1a1a24 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #111118;
+  pointer-events: none;
+}
+
+/* Empty state */
+#drop-zone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+#drop-zone.hidden { opacity: 0; }
+
+.drop-icon {
+  width: 64px;
+  height: 64px;
+  border: 2px dashed var(--text3);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+}
+
+.drop-icon svg { width: 28px; height: 28px; }
+.drop-text { font-size: 14px; color: var(--text3); font-weight: 500; }
+.drop-sub { font-size: 12px; color: var(--text3); opacity: 0.6; }
+
+/* ── RIGHT PANEL ── */
+.right-panel {
+  width: var(--panel-w);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.panel-section {
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.panel-header-action {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  border: 1px solid var(--border);
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.panel-header-action:hover {
+  background: var(--surface2);
+  color: var(--text2);
+  border-color: var(--border2);
+}
+
+.panel-header-action svg { width: 12px; height: 12px; }
+
+/* Layers list */
+.layers-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.layers-scroll::-webkit-scrollbar { width: 4px; }
+.layers-scroll::-webkit-scrollbar-track { background: transparent; }
+.layers-scroll::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.12s;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+
+.layer-item:hover { background: var(--surface2); }
+
+.layer-item.selected {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.layer-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--surface3);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 1px solid var(--border);
+}
+
+.layer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.layer-info { flex: 1; min-width: 0; }
+
+.layer-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-type {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 1px;
+}
+
+.layer-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.badge-ai {
+  background: var(--accent-bg);
+  color: var(--accent2);
+  border: 1px solid var(--accent-border);
+}
+
+.badge-bg {
+  background: rgba(62, 207, 142, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(62, 207, 142, 0.25);
+}
+
+.badge-text {
+  background: rgba(240, 180, 41, 0.1);
+  color: var(--amber);
+  border: 1px solid rgba(240, 180, 41, 0.25);
+}
+
+.layer-delete {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  background: transparent;
+  border: none;
+  opacity: 0;
+  transition: all 0.12s;
+}
+
+.layer-item:hover .layer-delete { opacity: 1; }
+.layer-delete:hover { color: var(--red); background: rgba(240, 90, 90, 0.1); }
+.layer-delete svg { width: 12px; height: 12px; }
+
+/* Properties panel */
+.props-area {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prop-label {
+  font-size: 11px;
+  color: var(--text3);
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.prop-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.prop-input:focus { border-color: var(--accent-border); }
+
+.prop-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface3);
+  outline: none;
+  cursor: pointer;
+}
+
+.prop-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.prop-value {
+  font-size: 11px;
+  color: var(--text2);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.no-selection {
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* AI Layers section */
+.ai-section {
+  padding: 12px 16px;
+}
+
+.ai-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(124,106,247,0.15), rgba(192,128,255,0.1));
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  color: var(--accent2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  letter-spacing: -0.2px;
+}
+
+.ai-btn:hover {
+  background: linear-gradient(135deg, rgba(124,106,247,0.25), rgba(192,128,255,0.18));
+  border-color: rgba(124,106,247,0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(124,106,247,0.2);
+}
+
+.ai-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.ai-btn svg { width: 16px; height: 16px; }
+
+.ai-desc {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.5;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* ── LOADING OVERLAY ── */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(14,14,18,0.9);
+  backdrop-filter: blur(8px);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  gap: 20px;
+}
+
+#loading-overlay.visible { display: flex; }
+
+.loading-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 40px 48px;
+  text-align: center;
+  max-width: 380px;
+}
+
+.loader-ring {
+  width: 56px;
+  height: 56px;
+  border: 3px solid rgba(124,106,247,0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.4px;
+}
+
+.loading-desc {
+  font-size: 13px;
+  color: var(--text3);
+  line-height: 1.6;
+}
+
+.loading-progress {
+  margin-top: 20px;
+  height: 3px;
+  background: var(--surface3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #c080ff);
+  border-radius: 2px;
+  animation: progress 3s ease-in-out infinite;
+  width: 40%;
+}
+
+@keyframes progress {
+  0% { width: 0%; margin-left: 0; }
+  50% { width: 70%; margin-left: 10%; }
+  100% { width: 20%; margin-left: 100%; }
+}
+
+/* ── ZOOM CONTROLS ── */
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 4px 6px;
+}
+
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.zoom-btn:hover { background: var(--surface2); color: var(--text); }
+.zoom-btn svg { width: 14px; height: 14px; }
+
+.zoom-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  min-width: 40px;
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text);
+  z-index: 9999;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.25s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+}
+
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error { border-left: 3px solid var(--red); }
+.toast.info { border-left: 3px solid var(--accent); }
+.toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Empty layers state */
+.empty-layers {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  color: var(--text3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.empty-layers svg { width: 28px; height: 28px; opacity: 0.5; }
+
+/* ── API KEY MODAL ── */
+#apikey-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(14,14,18,0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#apikey-modal.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.apikey-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 32px 36px;
+  width: 420px;
+  max-width: 92vw;
+  box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+}
+
+.apikey-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.apikey-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(66,133,244,0.2), rgba(52,168,83,0.15));
+  border: 1px solid rgba(66,133,244,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.apikey-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.apikey-close:hover { background: var(--surface2); color: var(--text2); }
+.apikey-close svg { width: 14px; height: 14px; }
+
+.apikey-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 4px;
+}
+
+.apikey-subtitle {
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.5;
+}
+
+.apikey-field {
+  margin: 20px 0 0;
+}
+
+.apikey-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.apikey-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.apikey-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Space Grotesk', monospace;
+  padding: 11px 44px 11px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.apikey-input:focus { border-color: rgba(66,133,244,0.5); }
+.apikey-input::placeholder { color: var(--text3); letter-spacing: 0; font-family: 'DM Sans', sans-serif; }
+
+.apikey-toggle {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.apikey-toggle:hover { color: var(--text2); }
+.apikey-toggle svg { width: 16px; height: 16px; }
+
+.apikey-notice {
+  display: flex;
+  gap: 10px;
+  background: rgba(66,133,244,0.07);
+  border: 1px solid rgba(66,133,244,0.18);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 16px;
+}
+
+.apikey-notice svg { width: 16px; height: 16px; color: #4285f4; flex-shrink: 0; margin-top: 1px; }
+.apikey-notice p { font-size: 11px; color: var(--text3); line-height: 1.6; }
+.apikey-notice strong { color: var(--text2); }
+
+.apikey-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.apikey-save {
+  flex: 1;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, #4285f4, #34a853);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: -0.2px;
+}
+
+.apikey-save:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(66,133,244,0.25); }
+
+.apikey-clear {
+  padding: 11px 14px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--text3);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.apikey-clear:hover { background: var(--surface2); color: var(--red); border-color: rgba(240,90,90,0.3); }
+
+/* API Key status pill in header */
+.apikey-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text3);
+}
+
+.apikey-status:hover { border-color: var(--border2); background: var(--surface3); }
+
+.apikey-status.has-key {
+  border-color: rgba(52,168,83,0.35);
+  background: rgba(52,168,83,0.08);
+  color: #34a853;
+}
+
+.apikey-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+}
+
+.apikey-status.has-key .apikey-dot {
+  background: #34a853;
+  box-shadow: 0 0 6px rgba(52,168,83,0.6);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">✦</div>
+    Magic <span>Layers</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost" onclick="triggerUpload()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+      </svg>
+      Subir imagen
+    </button>
+    <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleUpload(event)">
+
+    <!-- API Key Status Pill -->
+    <button class="apikey-status" id="apikey-status-btn" onclick="openApiKeyModal()" title="Configurar Google API Key">
+      <span class="apikey-dot"></span>
+      <span id="apikey-status-label">API Key</span>
+    </button>
+
+    <button class="btn btn-primary" id="export-btn" onclick="exportImage()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      Exportar PNG
+    </button>
+  </div>
+</header>
+
+<!-- Workspace -->
+<div class="workspace">
+
+  <!-- Left Toolbar -->
+  <div class="toolbar">
+    <button class="tool" id="tool-select" onclick="setTool('select')" title="Seleccionar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M5 3l14 9-7 1-4 7z"/>
+      </svg>
+      <span class="tool-label">Mover</span>
+    </button>
+    <button class="tool" id="tool-text" onclick="addText()" title="Añadir texto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M4 7h16M4 7V5h16v2M4 7l8 12 8-12M9 19h6"/>
+      </svg>
+      <span class="tool-label">Texto</span>
+    </button>
+
+    <div class="tool-sep"></div>
+
+    <button class="tool" id="tool-up" onclick="bringForward()" title="Traer al frente">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="9" width="12" height="12" rx="2"/>
+        <rect x="9" y="3" width="12" height="12" rx="2" fill="var(--surface)" stroke="currentColor"/>
+        <path d="M15 7V5M15 5l-2 2M15 5l2 2"/>
+      </svg>
+      <span class="tool-label">Subir</span>
+    </button>
+    <button class="tool" id="tool-down" onclick="sendBackward()" title="Enviar atrás">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="9" y="9" width="12" height="12" rx="2"/>
+        <rect x="3" y="3" width="12" height="12" rx="2" fill="var(--surface)" stroke="currentColor"/>
+        <path d="M9 17v2M9 19l-2-2M9 19l2-2"/>
+      </svg>
+      <span class="tool-label">Bajar</span>
+    </button>
+
+    <div class="tool-sep"></div>
+
+    <button class="tool" id="tool-delete" onclick="deleteSelected()" title="Eliminar selección">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4h6v2"/>
+      </svg>
+      <span class="tool-label">Borrar</span>
+    </button>
+  </div>
+
+  <!-- Canvas Area -->
+  <div class="canvas-area" id="canvas-area">
+    <div class="canvas-frame" id="canvas-frame">
+      <div class="canvas-bg-pattern" id="canvas-bg"></div>
+      <canvas id="main-canvas"></canvas>
+      <div id="drop-zone">
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </div>
+        <p class="drop-text">Arrastra o sube una imagen</p>
+        <p class="drop-sub">PNG, JPG, WebP hasta 20 MB</p>
+      </div>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(-0.1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <span class="zoom-val" id="zoom-label">100%</span>
+      <button class="zoom-btn" onclick="zoom(0.1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom" style="font-size:10px; font-weight:700; color: var(--text3)">FIT</button>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="right-panel">
+
+    <!-- AI Segmentation -->
+    <div class="panel-section">
+      <div class="panel-header">Magia IA</div>
+      <div class="ai-section">
+        <button class="ai-btn" id="ai-btn" onclick="runAISegmentation()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+          Separar Capas con IA
+        </button>
+        <p class="ai-desc">Detecta y extrae el sujeto principal automáticamente, dejando el fondo en una capa separada.</p>
+      </div>
+    </div>
+
+    <!-- Layers -->
+    <div class="panel-section" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="panel-header">
+        Capas
+        <span id="layer-count" style="font-size:11px; color:var(--text3); font-weight:400; text-transform:none; letter-spacing:0">0</span>
+      </div>
+      <div class="layers-scroll" id="layers-list">
+        <div class="empty-layers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/>
+          </svg>
+          Sin capas aún
+        </div>
+      </div>
+    </div>
+
+    <!-- Properties -->
+    <div class="panel-section">
+      <div class="panel-header">Propiedades</div>
+      <div id="props-panel">
+        <p class="no-selection">Selecciona un elemento para ajustar sus propiedades.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- API Key Modal -->
+<div id="apikey-modal">
+  <div class="apikey-card">
+    <div class="apikey-header">
+      <div class="apikey-icon">🔑</div>
+      <button class="apikey-close" onclick="closeApiKeyModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <p class="apikey-title">Google API Key</p>
+    <p class="apikey-subtitle">Necesaria para funciones avanzadas de IA como Gemini Vision. Solo se guarda en esta pestaña.</p>
+
+    <div class="apikey-field">
+      <label class="apikey-label" for="apikey-input">API Key</label>
+      <div class="apikey-input-wrap">
+        <input
+          type="password"
+          id="apikey-input"
+          class="apikey-input"
+          placeholder="AIzaSy..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button class="apikey-toggle" id="apikey-toggle-btn" onclick="toggleKeyVisibility()" title="Mostrar/ocultar">
+          <svg id="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="apikey-notice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p>Tu clave se almacena en <strong>sessionStorage</strong> — desaparece automáticamente al cerrar o cambiar de pestaña. Nunca se envía a ningún servidor externo.</p>
+    </div>
+
+    <div class="apikey-actions">
+      <button class="apikey-save" onclick="saveApiKey()">Guardar para esta sesión</button>
+      <button class="apikey-clear" onclick="clearApiKey()">Borrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay">
+  <div class="loading-card">
+    <div class="loader-ring"></div>
+    <p class="loading-title" id="load-title">Procesando imagen...</p>
+    <p class="loading-desc" id="load-desc">La IA está analizando y separando los elementos.</p>
+    <div class="loading-progress"><div class="loading-bar"></div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="toast-icon">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  <span id="toast-msg">Mensaje</span>
+</div>
+
+<script>
+// ─── GLOBALS ───────────────────────────────────────────────
+let canvas, currentZoom = 1;
+let sourceBlob = null, sourceImg = null;
+let canvasW = 800, canvasH = 600;
+let imglyLib = null;
+
+// ─── API KEY (sessionStorage — cleared on tab close) ───────
+const SESSION_KEY = 'ml_google_api_key';
+
+function getApiKey() {
+  return sessionStorage.getItem(SESSION_KEY) || '';
+}
+
+function saveApiKey() {
+  const val = document.getElementById('apikey-input').value.trim();
+  if (!val) { toast('Ingresa una API Key válida', 'error'); return; }
+  if (!val.startsWith('AI') || val.length < 20) {
+    toast('Formato incorrecto — debe empezar con "AI"', 'error');
+    return;
+  }
+  sessionStorage.setItem(SESSION_KEY, val);
+  updateApiKeyStatus();
+  closeApiKeyModal();
+  toast('API Key guardada para esta sesión', 'success');
+}
+
+function clearApiKey() {
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('apikey-input').value = '';
+  updateApiKeyStatus();
+  toast('API Key eliminada', 'info');
+}
+
+function updateApiKeyStatus() {
+  const key = getApiKey();
+  const btn = document.getElementById('apikey-status-btn');
+  const label = document.getElementById('apikey-status-label');
+  if (key) {
+    btn.classList.add('has-key');
+    const masked = key.slice(0, 6) + '••••' + key.slice(-4);
+    label.textContent = masked;
+  } else {
+    btn.classList.remove('has-key');
+    label.textContent = 'API Key';
+  }
+}
+
+function openApiKeyModal() {
+  const key = getApiKey();
+  document.getElementById('apikey-input').value = key;
+  document.getElementById('apikey-modal').classList.add('visible');
+}
+
+function closeApiKeyModal() {
+  document.getElementById('apikey-modal').classList.remove('visible');
+}
+
+function toggleKeyVisibility() {
+  const inp = document.getElementById('apikey-input');
+  const icon = document.getElementById('eye-icon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    inp.type = 'password';
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+}
+
+// Close modal on backdrop click
+document.addEventListener('click', e => {
+  const modal = document.getElementById('apikey-modal');
+  if (e.target === modal) closeApiKeyModal();
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeApiKeyModal();
+});
+
+// ─── INIT ──────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 60;
+  const ah = area.clientHeight - 60;
+  canvasW = Math.min(aw, 900);
+  canvasH = Math.min(ah, 700);
+
+  document.getElementById('canvas-frame').style.width = canvasW + 'px';
+  document.getElementById('canvas-frame').style.height = canvasH + 'px';
+  document.getElementById('canvas-bg').style.width = canvasW + 'px';
+  document.getElementById('canvas-bg').style.height = canvasH + 'px';
+
+  canvas = new fabric.Canvas('main-canvas', {
+    width: canvasW,
+    height: canvasH,
+    selection: true,
+    backgroundColor: null,
+    preserveObjectStacking: true
+  });
+
+  canvas.on('selection:created', onSelect);
+  canvas.on('selection:updated', onSelect);
+  canvas.on('selection:cleared', onDeselect);
+  canvas.on('object:added', refreshLayers);
+  canvas.on('object:removed', refreshLayers);
+  canvas.on('object:modified', refreshLayers);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    const tag = e.target.tagName.toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+    if (e.key === 'Escape') canvas.discardActiveObject(), canvas.renderAll();
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') canvas.undo && canvas.undo();
+    if (e.key === ']') bringForward();
+    if (e.key === '[') sendBackward();
+  });
+
+  // Drag & drop
+  const ca = document.getElementById('canvas-area');
+  ca.addEventListener('dragover', e => e.preventDefault());
+  ca.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(file);
+  });
+
+  // Restore API key status indicator on load
+  updateApiKeyStatus();
+});
+
+// ─── UPLOAD ────────────────────────────────────────────────
+function triggerUpload() { document.getElementById('file-input').click(); }
+function handleUpload(e) {
+  const file = e.target.files[0];
+  if (file) loadImage(file);
+  e.target.value = '';
+}
+
+function loadImage(file) {
+  sourceBlob = file;
+  showLoading('Cargando imagen...', 'Preparando el espacio de trabajo.');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    fabric.Image.fromURL(ev.target.result, img => {
+      canvas.clear();
+      const maxW = canvasW * 0.92, maxH = canvasH * 0.92;
+      if (img.width > maxW || img.height > maxH) {
+        const s = Math.min(maxW / img.width, maxH / img.height);
+        img.scale(s);
+      }
+      img.set({
+        left: canvasW / 2, top: canvasH / 2,
+        originX: 'center', originY: 'center',
+        name: 'Imagen original',
+        _layerType: 'bg'
+      });
+      sourceImg = img;
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      canvas.renderAll();
+      document.getElementById('drop-zone').classList.add('hidden');
+      document.getElementById('ai-btn').disabled = false;
+      document.getElementById('export-btn').disabled = false;
+      hideLoading();
+      toast('Imagen cargada correctamente', 'success');
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── AI SEGMENTATION ───────────────────────────────────────
+async function loadImgly() {
+  if (imglyLib) return imglyLib;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/bundle.umd.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = () => {
+      if (window.imglyRemoveBackground) {
+        imglyLib = window.imglyRemoveBackground;
+        resolve(imglyLib);
+      } else reject(new Error('imgly init failed'));
+    };
+    s.onerror = () => reject(new Error('Failed to load AI library'));
+    document.head.appendChild(s);
+  });
+}
+
+async function runAISegmentation() {
+  if (!sourceBlob) { toast('Sube una imagen primero', 'error'); return; }
+  showLoading('Analizando sujetos...', 'El modelo de IA está detectando bordes y separando el sujeto del fondo. Primera ejecución puede tardar 15–30s mientras descarga el modelo.');
+
+  try {
+    document.getElementById('ai-btn').disabled = true;
+    const bgRemover = await loadImgly();
+    const cfg = { publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/' };
+    const resultBlob = await bgRemover(sourceBlob, cfg);
+    const url = URL.createObjectURL(resultBlob);
+
+    fabric.Image.fromURL(url, img => {
+      if (!sourceImg) return;
+      img.set({
+        left: sourceImg.left,
+        top: sourceImg.top,
+        scaleX: sourceImg.scaleX,
+        scaleY: sourceImg.scaleY,
+        originX: 'center', originY: 'center',
+        name: 'Sujeto (IA)',
+        _layerType: 'ai'
+      });
+
+      // Animate in
+      img.set({ opacity: 0, top: (sourceImg.top || canvasH/2) - 30 });
+      canvas.add(img);
+      canvas.setActiveObject(img);
+
+      img.animate({ opacity: 1, top: sourceImg.top }, {
+        duration: 600,
+        easing: fabric.util.ease.easeOutCubic,
+        onChange: canvas.renderAll.bind(canvas),
+        onComplete: () => {
+          refreshLayers();
+          hideLoading();
+          document.getElementById('ai-btn').disabled = false;
+          toast('¡Sujeto extraído con éxito!', 'success');
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    hideLoading();
+    document.getElementById('ai-btn').disabled = false;
+    toast('Error al procesar. Revisa tu conexión.', 'error');
+  }
+}
+
+// ─── TOOLS ─────────────────────────────────────────────────
+function setTool(t) {
+  document.querySelectorAll('.tool').forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-' + t)?.classList.add('active');
+}
+
+function addText() {
+  const t = new fabric.IText('Editar texto', {
+    left: canvasW / 2, top: canvasH / 2,
+    originX: 'center', originY: 'center',
+    fontFamily: 'DM Sans',
+    fontSize: 48,
+    fill: '#ffffff',
+    fontWeight: '700',
+    name: 'Texto',
+    _layerType: 'text'
+  });
+  canvas.add(t);
+  canvas.setActiveObject(t);
+  t.enterEditing();
+  t.selectAll();
+  canvas.renderAll();
+  document.getElementById('drop-zone').classList.add('hidden');
+  document.getElementById('export-btn').disabled = false;
+}
+
+function deleteSelected() {
+  const sel = canvas.getActiveObjects();
+  if (!sel.length) return;
+  canvas.discardActiveObject();
+  sel.forEach(o => canvas.remove(o));
+  canvas.renderAll();
+}
+
+function bringForward() {
+  const o = canvas.getActiveObject();
+  if (o) { canvas.bringForward(o); refreshLayers(); }
+}
+
+function sendBackward() {
+  const o = canvas.getActiveObject();
+  if (o) { canvas.sendBackwards(o); refreshLayers(); }
+}
+
+// ─── LAYERS PANEL ──────────────────────────────────────────
+function refreshLayers() {
+  const list = document.getElementById('layers-list');
+  const objs = canvas.getObjects();
+  document.getElementById('layer-count').textContent = objs.length;
+
+  if (!objs.length) {
+    list.innerHTML = '<div class="empty-layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg>Sin capas aún</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  const active = canvas.getActiveObject();
+  [...objs].reverse().forEach((obj, vi) => {
+    const ri = objs.length - 1 - vi;
+    const item = document.createElement('div');
+    const isActive = (obj === active);
+    item.className = 'layer-item' + (isActive ? ' selected' : '');
+
+    const lt = obj._layerType || 'bg';
+    const icons = { bg: '🖼', ai: '✦', text: 'T' };
+    const badges = {
+      bg: '<span class="layer-badge badge-bg">BG</span>',
+      ai: '<span class="layer-badge badge-ai">IA</span>',
+      text: '<span class="layer-badge badge-text">TXT</span>'
+    };
+
+    item.innerHTML = `
+      <div class="layer-thumb">${icons[lt] || '🖼'}</div>
+      <div class="layer-info">
+        <div class="layer-name">${obj.name || 'Capa ' + (ri + 1)}</div>
+        <div class="layer-type">${lt === 'ai' ? 'Extracción IA' : lt === 'text' ? 'Texto editable' : 'Imagen'}</div>
+      </div>
+      ${badges[lt] || ''}
+      <button class="layer-delete" onclick="removeLayer(${ri}, event)" title="Eliminar capa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+      </button>
+    `;
+    item.addEventListener('click', () => {
+      canvas.setActiveObject(obj);
+      canvas.renderAll();
+      refreshLayers();
+    });
+    list.appendChild(item);
+  });
+}
+
+window.removeLayer = (idx, e) => {
+  e.stopPropagation();
+  const o = canvas.item(idx);
+  if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.renderAll(); }
+};
+
+// ─── PROPERTIES PANEL ──────────────────────────────────────
+function onSelect() {
+  const obj = canvas.getActiveObject();
+  if (!obj) return onDeselect();
+  const panel = document.getElementById('props-panel');
+
+  const isText = obj.type === 'i-text' || obj.type === 'text';
+  const x = Math.round(obj.left || 0);
+  const y = Math.round(obj.top || 0);
+  const w = Math.round((obj.width || 0) * (obj.scaleX || 1));
+  const h = Math.round((obj.height || 0) * (obj.scaleY || 1));
+  const op = Math.round((obj.opacity || 1) * 100);
+  const rot = Math.round(obj.angle || 0);
+
+  panel.innerHTML = `
+    <div class="props-area">
+      <div class="prop-row">
+        <span class="prop-label">X / Y</span>
+        <input class="prop-input" style="width:60px" type="number" id="px-x" value="${x}" onchange="setProp('left', +this.value)">
+        <input class="prop-input" style="width:60px" type="number" id="px-y" value="${y}" onchange="setProp('top', +this.value)">
+      </div>
+      <div class="prop-row">
+        <span class="prop-label">W / H</span>
+        <input class="prop-input" style="width:60px" type="number" id="px-w" value="${w}" onchange="setWH('w', +this.value)">
+        <input class="prop-input" style="width:60px" type="number" id="px-h" value="${h}" onchange="setWH('h', +this.value)">
+      </div>
+      <div class="prop-row">
+        <span class="prop-label">Rotación</span>
+        <input type="range" class="prop-slider" min="-180" max="180" value="${rot}" onInput="setProp('angle', +this.value); document.getElementById('rot-val').textContent=this.value+'°'">
+        <span class="prop-value" id="rot-val">${rot}°</span>
+      </div>
+      <div class="prop-row">
+        <span class="prop-label">Opacidad</span>
+        <input type="range" class="prop-slider" min="0" max="100" value="${op}" onInput="setProp('opacity', this.value/100); document.getElementById('op-val').textContent=this.value+'%'">
+        <span class="prop-value" id="op-val">${op}%</span>
+      </div>
+      ${isText ? `
+      <div class="prop-row">
+        <span class="prop-label">Color</span>
+        <input type="color" class="prop-input" style="padding:2px; height:32px; width:52px; cursor:pointer" value="${obj.fill || '#ffffff'}" onchange="setProp('fill', this.value)">
+        <input class="prop-input" type="number" style="width:60px" min="8" max="200" value="${Math.round(obj.fontSize || 40)}" onchange="setProp('fontSize', +this.value)">
+      </div>` : ''}
+    </div>
+  `;
+  refreshLayers();
+}
+
+function onDeselect() {
+  document.getElementById('props-panel').innerHTML = '<p class="no-selection">Selecciona un elemento para ajustar sus propiedades.</p>';
+  refreshLayers();
+}
+
+function setProp(key, val) {
+  const o = canvas.getActiveObject();
+  if (!o) return;
+  o.set(key, val);
+  canvas.renderAll();
+}
+
+function setWH(axis, val) {
+  const o = canvas.getActiveObject();
+  if (!o) return;
+  if (axis === 'w') o.scaleX = val / o.width;
+  else o.scaleY = val / o.height;
+  canvas.renderAll();
+}
+
+// ─── ZOOM ──────────────────────────────────────────────────
+function zoom(delta) {
+  currentZoom = Math.min(3, Math.max(0.2, currentZoom + delta));
+  applyZoom();
+}
+
+function resetZoom() {
+  currentZoom = 1;
+  applyZoom();
+}
+
+function applyZoom() {
+  const frame = document.getElementById('canvas-frame');
+  frame.style.transform = `scale(${currentZoom})`;
+  frame.style.transformOrigin = 'center center';
+  document.getElementById('zoom-label').textContent = Math.round(currentZoom * 100) + '%';
+}
+
+// ─── EXPORT ────────────────────────────────────────────────
+function exportImage() {
+  if (!canvas.getObjects().length) { toast('No hay contenido para exportar', 'error'); return; }
+  canvas.discardActiveObject();
+  canvas.renderAll();
+  const dataURL = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
+  const a = document.createElement('a');
+  a.download = 'magic-layers-export.png';
+  a.href = dataURL;
+  a.click();
+  toast('Imagen exportada en 2x resolución', 'success');
+}
+
+// ─── UI HELPERS ────────────────────────────────────────────
+function showLoading(title, desc) {
+  document.getElementById('load-title').textContent = title;
+  document.getElementById('load-desc').textContent = desc;
+  document.getElementById('loading-overlay').classList.add('visible');
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('visible');
+}
+
+let toastTimer;
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  const icons = {
+    success: '<polyline points="20 6 9 17 4 12"/>',
+    error: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+  };
+  document.getElementById('toast-icon').innerHTML = icons[type] || icons.info;
+  document.getElementById('toast-msg').textContent = msg;
+  el.className = `toast ${type}`;
+  clearTimeout(toastTimer);
+  setTimeout(() => el.classList.add('show'), 10);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>
