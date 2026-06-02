@@ -1317,52 +1317,56 @@ function loadImage(file) {
 }
 
 // ─── AI SEGMENTATION ───────────────────────────────────────
+// Uses dynamic ESM import via esm.sh which correctly resolves
+// @imgly/background-removal v1.7.0 and its WASM/ONNX assets.
 async function loadImgly() {
   if (imglyLib) return imglyLib;
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/bundle.umd.js';
-    s.crossOrigin = 'anonymous';
-    s.onload = () => {
-      if (window.imglyRemoveBackground) {
-        imglyLib = window.imglyRemoveBackground;
-        resolve(imglyLib);
-      } else reject(new Error('imgly init failed'));
-    };
-    s.onerror = () => reject(new Error('Failed to load AI library'));
-    document.head.appendChild(s);
-  });
+  try {
+    // esm.sh correctly bundles ESM packages for browser import()
+    const mod = await import('https://esm.sh/@imgly/background-removal@1.7.0');
+    imglyLib = mod.removeBackground || mod.default;
+    if (!imglyLib) throw new Error('removeBackground not found in module');
+    return imglyLib;
+  } catch (e) {
+    throw new Error('No se pudo cargar la librería IA: ' + e.message);
+  }
 }
 
 async function runAISegmentation() {
   if (!sourceBlob) { toast('Sube una imagen primero', 'error'); return; }
-  showLoading('Analizando sujetos...', 'El modelo de IA está detectando bordes y separando el sujeto del fondo. Primera ejecución puede tardar 15–30s mientras descarga el modelo.');
+  showLoading('Analizando sujetos...', 'El modelo de IA está detectando bordes y separando el sujeto del fondo. La primera ejecución descarga el modelo (~50MB) — puede tardar 20–40s.');
 
   try {
     document.getElementById('ai-btn').disabled = true;
     const bgRemover = await loadImgly();
-    const cfg = { publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/' };
+
+    // publicPath points to unpkg where ONNX/WASM assets are hosted by default
+    const cfg = {
+      publicPath: 'https://unpkg.com/@imgly/background-removal@1.7.0/dist/',
+      debug: false
+    };
+
     const resultBlob = await bgRemover(sourceBlob, cfg);
     const url = URL.createObjectURL(resultBlob);
 
     fabric.Image.fromURL(url, img => {
       if (!sourceImg) return;
+      const savedTop = sourceImg.top || canvasH / 2;
       img.set({
         left: sourceImg.left,
-        top: sourceImg.top,
+        top: savedTop - 30,
         scaleX: sourceImg.scaleX,
         scaleY: sourceImg.scaleY,
         originX: 'center', originY: 'center',
+        opacity: 0,
         name: 'Sujeto (IA)',
         _layerType: 'ai'
       });
 
-      // Animate in
-      img.set({ opacity: 0, top: (sourceImg.top || canvasH/2) - 30 });
       canvas.add(img);
       canvas.setActiveObject(img);
 
-      img.animate({ opacity: 1, top: sourceImg.top }, {
+      img.animate({ opacity: 1, top: savedTop }, {
         duration: 600,
         easing: fabric.util.ease.easeOutCubic,
         onChange: canvas.renderAll.bind(canvas),
@@ -1375,10 +1379,10 @@ async function runAISegmentation() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error('AI Error:', err);
     hideLoading();
     document.getElementById('ai-btn').disabled = false;
-    toast('Error al procesar. Revisa tu conexión.', 'error');
+    toast('Error al procesar. Revisa consola o conexión.', 'error');
   }
 }
 
