@@ -1317,15 +1317,16 @@ function loadImage(file) {
 }
 
 // ─── AI SEGMENTATION ───────────────────────────────────────
-// Uses dynamic ESM import via esm.sh which correctly resolves
-// @imgly/background-removal v1.7.0 and its WASM/ONNX assets.
+// Dynamic ESM import via esm.sh.
+// IMPORTANT: do NOT set publicPath manually — the library resolves
+// assets from staticimgly.com by default. Only override 'model'
+// to use 'small' (~40MB) which is the reliably available variant.
 async function loadImgly() {
   if (imglyLib) return imglyLib;
   try {
-    // esm.sh correctly bundles ESM packages for browser import()
     const mod = await import('https://esm.sh/@imgly/background-removal@1.7.0');
     imglyLib = mod.removeBackground || mod.default;
-    if (!imglyLib) throw new Error('removeBackground not found in module');
+    if (typeof imglyLib !== 'function') throw new Error('removeBackground not found in module');
     return imglyLib;
   } catch (e) {
     throw new Error('No se pudo cargar la librería IA: ' + e.message);
@@ -1334,15 +1335,17 @@ async function loadImgly() {
 
 async function runAISegmentation() {
   if (!sourceBlob) { toast('Sube una imagen primero', 'error'); return; }
-  showLoading('Analizando sujetos...', 'El modelo de IA está detectando bordes y separando el sujeto del fondo. La primera ejecución descarga el modelo (~50MB) — puede tardar 20–40s.');
+  showLoading('Analizando sujetos...', 'Descargando modelo IA (~40MB la primera vez) y procesando. Esto puede tardar 20–40s. Las siguientes ejecuciones serán instantáneas (queda en caché).');
 
   try {
     document.getElementById('ai-btn').disabled = true;
     const bgRemover = await loadImgly();
 
-    // publicPath points to unpkg where ONNX/WASM assets are hosted by default
+    // Use 'small' model (~40MB) — reliably hosted on staticimgly.com CDN.
+    // Do NOT set publicPath: let the library use its own default CDN.
     const cfg = {
-      publicPath: 'https://unpkg.com/@imgly/background-removal@1.7.0/dist/',
+      model: 'small',
+      output: { format: 'image/png', type: 'foreground' },
       debug: false
     };
 
@@ -1382,7 +1385,7 @@ async function runAISegmentation() {
     console.error('AI Error:', err);
     hideLoading();
     document.getElementById('ai-btn').disabled = false;
-    toast('Error al procesar. Revisa consola o conexión.', 'error');
+    toast('Error: ' + (err.message || 'Revisa consola o conexión.'), 'error');
   }
 }
 
