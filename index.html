@@ -811,6 +811,132 @@ header {
 
 .empty-layers svg { width: 28px; height: 28px; opacity: 0.5; }
 
+
+/* ── SAM CLICK-TO-SEGMENT ── */
+.sam-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  z-index: 10;
+  display: none;
+}
+.sam-overlay.active { display: block; }
+
+.sam-point {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.4), 0 0 8px rgba(124,106,247,0.6);
+  animation: sam-pop 0.2s ease-out;
+}
+.sam-point.positive { background: var(--accent); }
+.sam-point.negative { background: var(--red); }
+
+@keyframes sam-pop {
+  from { transform: translate(-50%,-50%) scale(0.4); opacity:0; }
+  to   { transform: translate(-50%,-50%) scale(1);   opacity:1; }
+}
+
+.sam-mask-preview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: screen;
+}
+
+.sam-toolbar {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 6px 8px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.sam-toolbar.visible { display: flex; }
+
+.sam-tb-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text2);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sam-tb-btn:hover { background: var(--surface3); color: var(--text); }
+.sam-tb-btn.confirm {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sam-tb-btn.confirm:hover { background: #6a58e5; }
+.sam-tb-btn.confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+.sam-tb-btn.cancel-btn { color: var(--text3); }
+.sam-tb-btn.cancel-btn:hover { color: var(--red); border-color: rgba(240,90,90,0.3); }
+.sam-tb-btn svg { width: 13px; height: 13px; }
+
+.sam-tb-sep { width: 1px; height: 20px; background: var(--border2); margin: 0 2px; }
+
+.sam-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text3);
+  transition: all 0.15s;
+}
+.sam-mode-btn.active-mode {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent2);
+}
+.sam-mode-btn:hover:not(.active-mode) { background: var(--surface2); color: var(--text2); }
+
+.sam-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--accent-border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent2);
+  display: none;
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: 0 4px 16px rgba(124,106,247,0.2);
+}
+.sam-status.visible { display: block; }
+
 /* ── API KEY MODAL ── */
 #apikey-modal {
   position: fixed;
@@ -1112,6 +1238,16 @@ header {
 
     <div class="tool-sep"></div>
 
+    <button class="tool" id="tool-sam" onclick="toggleSamMode()" title="Seleccionar objeto con IA (SAM)" style="position:relative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        <path d="M11 8v6M8 11h6"/>
+      </svg>
+      <span class="tool-label">SAM</span>
+    </button>
+
+    <div class="tool-sep"></div>
+
     <button class="tool" id="tool-delete" onclick="deleteSelected()" title="Eliminar selección">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
@@ -1126,6 +1262,31 @@ header {
     <div class="canvas-frame" id="canvas-frame">
       <div class="canvas-bg-pattern" id="canvas-bg"></div>
       <canvas id="main-canvas"></canvas>
+      <!-- SAM overlay for click-to-segment -->
+      <canvas id="sam-mask-canvas" class="sam-mask-preview"></canvas>
+      <div id="sam-overlay" class="sam-overlay"></div>
+      <div id="sam-status" class="sam-status">✦ Haz clic en un objeto para segmentarlo</div>
+      <!-- SAM floating toolbar -->
+      <div id="sam-toolbar" class="sam-toolbar">
+        <button class="sam-mode-btn active-mode" id="sam-pos-btn" onclick="setSamClickMode('positive')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Añadir
+        </button>
+        <button class="sam-mode-btn" id="sam-neg-btn" onclick="setSamClickMode('negative')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Quitar
+        </button>
+        <div class="sam-tb-sep"></div>
+        <button class="sam-tb-btn" onclick="clearSamPoints()" title="Limpiar puntos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+          Limpiar
+        </button>
+        <button class="sam-tb-btn confirm" id="sam-confirm-btn" onclick="confirmSamExtract()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Extraer capa
+        </button>
+        <button class="sam-tb-btn cancel-btn" onclick="toggleSamMode()">✕ Salir</button>
+      </div>
       <div id="drop-zone">
         <div class="drop-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1863,6 +2024,336 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.classList.add('show'), 10);
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
+
+// ─── SAM: CLICK-TO-SEGMENT ─────────────────────────────────────────────
+// Uses Transformers.js + Xenova/slimsam-77-uniform (5.5M params, ~22MB)
+// Runs 100% client-side. Requires COOP/COEP headers for SharedArrayBuffer
+// (works on GitHub Pages, Vercel — NOT on file:// protocol directly).
+
+let samModel = null, samProcessor = null;
+let samActive = false;
+let samClickMode = 'positive'; // 'positive' | 'negative'
+let samPoints = [];   // [{x, y, label}]  label: 1=pos, 0=neg
+let samImageEmbedding = null;
+let samSourceImageObj = null;
+let samMaskCtx = null;
+let samLoadPromise = null;
+
+// Sync mask canvas size with main canvas
+function syncSamCanvas() {
+  const mc = document.getElementById('sam-mask-canvas');
+  mc.width  = canvasW;
+  mc.height = canvasH;
+  samMaskCtx = mc.getContext('2d');
+}
+
+async function loadSamModel() {
+  if (samModel) return true;
+  if (samLoadPromise) return samLoadPromise;
+
+  samLoadPromise = (async () => {
+    showLoading('Cargando modelo SAM...', 'Descargando SlimSAM (~22MB). Solo una vez — queda en caché del navegador.');
+    try {
+      const { SamModel, AutoProcessor, RawImage } = await import(
+        'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js'
+      );
+      window._SamRawImage = RawImage;
+      samProcessor = await AutoProcessor.from_pretrained('Xenova/slimsam-77-uniform');
+      samModel     = await SamModel.from_pretrained('Xenova/slimsam-77-uniform');
+      hideLoading();
+      return true;
+    } catch(e) {
+      hideLoading();
+      samLoadPromise = null;
+      console.error('SAM load error:', e);
+      toast('No se pudo cargar SAM. Requiere conexión y servidor (no file://)', 'error');
+      return false;
+    }
+  })();
+  return samLoadPromise;
+}
+
+async function toggleSamMode() {
+  if (samActive) {
+    exitSamMode();
+    return;
+  }
+  if (!sourceImg) { toast('Sube una imagen primero', 'error'); return; }
+
+  // Load model first
+  const ok = await loadSamModel();
+  if (!ok) return;
+
+  samActive = true;
+  samPoints = [];
+  samImageEmbedding = null;
+  samSourceImageObj = sourceImg;
+
+  // Compute image embedding once for this image
+  await computeSamEmbedding();
+
+  // Activate overlay
+  syncSamCanvas();
+  document.getElementById('sam-overlay').classList.add('active');
+  document.getElementById('sam-status').classList.add('visible');
+  document.getElementById('sam-toolbar').classList.add('visible');
+  document.getElementById('tool-sam').classList.add('active');
+  canvas.selection = false;
+  canvas.discardActiveObject();
+  canvas.renderAll();
+
+  // Bind click on overlay
+  document.getElementById('sam-overlay').onclick = handleSamClick;
+  setSamClickMode('positive');
+}
+
+function exitSamMode() {
+  samActive = false;
+  samPoints = [];
+  clearSamMask();
+  clearSamDots();
+  document.getElementById('sam-overlay').classList.remove('active');
+  document.getElementById('sam-overlay').onclick = null;
+  document.getElementById('sam-status').classList.remove('visible');
+  document.getElementById('sam-toolbar').classList.remove('visible');
+  document.getElementById('tool-sam').classList.remove('active');
+  document.getElementById('sam-confirm-btn').disabled = true;
+  canvas.selection = true;
+  canvas.renderAll();
+}
+
+async function computeSamEmbedding() {
+  if (!samSourceImageObj || !samProcessor || !samModel) return;
+  showLoading('Generando embedding...', 'El modelo analiza la imagen una vez para segmentación rápida.');
+  try {
+    // Get base64 of source image from fabric
+    const tmpCanvas = document.createElement('canvas');
+    const scW = Math.round(samSourceImageObj.width  * samSourceImageObj.scaleX);
+    const scH = Math.round(samSourceImageObj.height * samSourceImageObj.scaleY);
+    tmpCanvas.width  = samSourceImageObj.width;
+    tmpCanvas.height = samSourceImageObj.height;
+    const ctx = tmpCanvas.getContext('2d');
+    samSourceImageObj.drawObject(ctx);
+    const dataURL = tmpCanvas.toDataURL('image/png');
+
+    const { RawImage } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+    const rawImg = await RawImage.read(dataURL);
+    const processed = await samProcessor(rawImg);
+    const { image_embeddings, original_sizes, reshaped_input_sizes } = await samModel.get_image_embeddings(processed);
+    samImageEmbedding = { image_embeddings, original_sizes, reshaped_input_sizes, rawImg };
+    hideLoading();
+  } catch(e) {
+    hideLoading();
+    console.error('Embedding error:', e);
+    toast('Error generando embedding: ' + e.message, 'error');
+  }
+}
+
+function setSamClickMode(mode) {
+  samClickMode = mode;
+  document.getElementById('sam-pos-btn').classList.toggle('active-mode', mode === 'positive');
+  document.getElementById('sam-neg-btn').classList.toggle('active-mode', mode === 'negative');
+  document.getElementById('sam-overlay').style.cursor = mode === 'positive' ? 'crosshair' : 'cell';
+}
+
+async function handleSamClick(e) {
+  if (!samActive || !samImageEmbedding) return;
+
+  const overlay = document.getElementById('sam-overlay');
+  const rect = overlay.getBoundingClientRect();
+  // Coordinates relative to canvas frame (accounting for zoom)
+  const frameRect = document.getElementById('canvas-frame').getBoundingClientRect();
+  const cx = (e.clientX - frameRect.left) / currentZoom;
+  const cy = (e.clientY - frameRect.top)  / currentZoom;
+
+  // Map to source image pixel space
+  const imgLeft   = samSourceImageObj.left   - (samSourceImageObj.width  * samSourceImageObj.scaleX / 2);
+  const imgTop    = samSourceImageObj.top    - (samSourceImageObj.height * samSourceImageObj.scaleY / 2);
+  const imgW      = samSourceImageObj.width  * samSourceImageObj.scaleX;
+  const imgH      = samSourceImageObj.height * samSourceImageObj.scaleY;
+  const relX = (cx - imgLeft) / imgW;
+  const relY = (cy - imgTop)  / imgH;
+
+  if (relX < 0 || relX > 1 || relY < 0 || relY > 1) {
+    toast('Haz clic dentro de la imagen', 'info'); return;
+  }
+
+  const label = samClickMode === 'positive' ? 1 : 0;
+  samPoints.push({ x: relX, y: relY, label, cx, cy });
+
+  // Draw dot
+  renderSamDot(cx, cy, samClickMode);
+
+  // Run inference
+  await runSamInference();
+}
+
+function renderSamDot(cx, cy, mode) {
+  const overlay = document.getElementById('sam-overlay');
+  const dot = document.createElement('div');
+  dot.className = 'sam-point ' + mode;
+  dot.style.left = cx + 'px';
+  dot.style.top  = cy + 'px';
+  overlay.appendChild(dot);
+}
+
+function clearSamDots() {
+  const overlay = document.getElementById('sam-overlay');
+  overlay.querySelectorAll('.sam-point').forEach(d => d.remove());
+}
+
+function clearSamMask() {
+  if (samMaskCtx) samMaskCtx.clearRect(0, 0, canvasW, canvasH);
+}
+
+async function runSamInference() {
+  if (!samPoints.length || !samImageEmbedding) return;
+
+  try {
+    const { RawImage } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+    const { image_embeddings, original_sizes, reshaped_input_sizes, rawImg } = samImageEmbedding;
+
+    // Build input_points [[x*W, y*H]] in original image coords
+    const origW = original_sizes[0][1]; // [H, W]
+    const origH = original_sizes[0][0];
+    const input_points = [samPoints.map(p => [p.x * origW, p.y * origH])];
+    const input_labels = [samPoints.map(p => p.label)];
+
+    const processed = await samProcessor(rawImg, input_points, input_labels);
+    const outputs = await samModel({
+      ...processed,
+      image_embeddings,
+      original_sizes,
+      reshaped_input_sizes
+    });
+
+    const masks = await samProcessor.post_process_masks(
+      outputs.pred_masks, original_sizes, reshaped_input_sizes
+    );
+
+    // masks[0][0] is the primary mask tensor (best score)
+    const mask = masks[0][0];
+    renderSamMaskPreview(mask);
+    document.getElementById('sam-confirm-btn').disabled = false;
+
+    // Store current mask for extraction
+    window._samCurrentMask = mask;
+    window._samCurrentMaskOrigW = origW;
+    window._samCurrentMaskOrigH = origH;
+  } catch(e) {
+    console.error('SAM inference error:', e);
+    toast('Error en segmentación: ' + e.message, 'error');
+  }
+}
+
+function renderSamMaskPreview(mask) {
+  if (!samMaskCtx) return;
+  samMaskCtx.clearRect(0, 0, canvasW, canvasH);
+
+  // mask is a Tensor with shape [1, H, W] or [H, W]
+  const data = mask.data; // Float32Array of 0/1
+  const mH = mask.dims[mask.dims.length - 2];
+  const mW = mask.dims[mask.dims.length - 1];
+
+  // Draw mask aligned to source image on canvas
+  const imgLeft = samSourceImageObj.left   - (samSourceImageObj.width  * samSourceImageObj.scaleX / 2);
+  const imgTop  = samSourceImageObj.top    - (samSourceImageObj.height * samSourceImageObj.scaleY / 2);
+  const imgW    = samSourceImageObj.width  * samSourceImageObj.scaleX;
+  const imgH    = samSourceImageObj.height * samSourceImageObj.scaleY;
+
+  // Offscreen canvas for the mask at original resolution
+  const offscreen = document.createElement('canvas');
+  offscreen.width  = mW;
+  offscreen.height = mH;
+  const octx = offscreen.getContext('2d');
+  const imgData = octx.createImageData(mW, mH);
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] > 0.5 ? 255 : 0;
+    imgData.data[i * 4]     = 124;   // R accent
+    imgData.data[i * 4 + 1] = 106;   // G
+    imgData.data[i * 4 + 2] = 247;   // B
+    imgData.data[i * 4 + 3] = v > 0 ? 180 : 0;
+  }
+  octx.putImageData(imgData, 0, 0);
+
+  // Draw onto sam-mask-canvas scaled to image position
+  samMaskCtx.drawImage(offscreen, imgLeft, imgTop, imgW, imgH);
+}
+
+async function confirmSamExtract() {
+  if (!window._samCurrentMask || !samSourceImageObj) return;
+
+  const mask = window._samCurrentMask;
+  const mH = mask.dims[mask.dims.length - 2];
+  const mW = mask.dims[mask.dims.length - 1];
+  const data = mask.data;
+
+  // Get source image as ImageData at its native resolution
+  const srcW = samSourceImageObj.width;
+  const srcH = samSourceImageObj.height;
+
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width  = srcW;
+  srcCanvas.height = srcH;
+  const srcCtx = srcCanvas.getContext('2d');
+  samSourceImageObj.drawObject(srcCtx);
+  const srcImgData = srcCtx.getImageData(0, 0, srcW, srcH);
+
+  // Output canvas
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width  = srcW;
+  outCanvas.height = srcH;
+  const outCtx = outCanvas.getContext('2d');
+  const outImgData = outCtx.createImageData(srcW, srcH);
+
+  // Apply mask: for each output pixel, sample mask at proportional position
+  for (let py = 0; py < srcH; py++) {
+    for (let px = 0; px < srcW; px++) {
+      const mx = Math.floor((px / srcW) * mW);
+      const my = Math.floor((py / srcH) * mH);
+      const mi = my * mW + mx;
+      const si = (py * srcW + px) * 4;
+      const oi = (py * srcW + px) * 4;
+      outImgData.data[oi]     = srcImgData.data[si];
+      outImgData.data[oi + 1] = srcImgData.data[si + 1];
+      outImgData.data[oi + 2] = srcImgData.data[si + 2];
+      outImgData.data[oi + 3] = data[mi] > 0.5 ? srcImgData.data[si + 3] : 0;
+    }
+  }
+  outCtx.putImageData(outImgData, 0, 0);
+  const url = outCanvas.toDataURL('image/png');
+
+  fabric.Image.fromURL(url, img => {
+    img.set({
+      left: samSourceImageObj.left,
+      top:  samSourceImageObj.top,
+      scaleX: samSourceImageObj.scaleX,
+      scaleY: samSourceImageObj.scaleY,
+      originX: 'center', originY: 'center',
+      name: '🎯 Objeto SAM',
+      _layerType: 'ai',
+      opacity: 0
+    });
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    img.animate('opacity', 1, {
+      duration: 400,
+      onChange: canvas.renderAll.bind(canvas),
+      onComplete: () => { refreshLayers(); toast('¡Objeto extraído como nueva capa!', 'success'); }
+    });
+  });
+
+  exitSamMode();
+}
+
+function clearSamPoints() {
+  samPoints = [];
+  clearSamDots();
+  clearSamMask();
+  window._samCurrentMask = null;
+  document.getElementById('sam-confirm-btn').disabled = true;
+}
+
 </script>
 </body>
 </html>
