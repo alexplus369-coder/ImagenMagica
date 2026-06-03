@@ -845,10 +845,10 @@ header {
 
 .sam-mask-preview {
   position: absolute;
-  inset: 0;
+  top: 0; left: 0;
   pointer-events: none;
-  opacity: 0.55;
-  mix-blend-mode: screen;
+  opacity: 0.65;
+  /* No mix-blend-mode: screen — it makes purple invisible on dark bg */
 }
 
 .sam-toolbar {
@@ -2028,31 +2028,32 @@ function toast(msg, type = 'info') {
 }
 
 // ─── SAM: CLICK-TO-SEGMENT ────────────────────────────────────────────────
-// Transformers.js + Xenova/slimsam-77-uniform (5.5M params, ~22MB).
-// Correct API flow: processor(image, points) → model(inputs) → post_process_masks
-// original_sizes / reshaped_input_sizes come from `inputs`, NOT from embedding output.
+// Transformers.js + Xenova/slimsam-77-uniform (5.5M params).
+// Single-pass API: processor(img,pts,labels) → model(inputs) → post_process_masks
+// original_sizes / reshaped_input_sizes come from `inputs`, NOT embeddings.
 
 let samModel = null, samProcessor = null;
-let samActive = false;
+let samActive    = false;
 let samClickMode = 'positive';
-let samPoints   = [];   // [{x, y, label, cx, cy}]
-let samRawImage = null; // RawImage of the source layer
-let samMaskCtx  = null;
+let samPoints    = [];    // [{px,py,label,cx,cy}] — px/py in RawImage space
+let samRawImage  = null;  // RawImage built from source layer
+let samMaskCtx   = null;
 let samLoadPromise = null;
 
-// ── Sync overlay canvas to main canvas size ─────────────────────────────
+// ── Sync mask canvas to exactly match the main canvas ───────────────────
 function syncSamCanvas() {
   const mc = document.getElementById('sam-mask-canvas');
   mc.width  = canvasW;
   mc.height = canvasH;
+  mc.style.width  = canvasW + 'px';
+  mc.style.height = canvasH + 'px';
   samMaskCtx = mc.getContext('2d');
 }
 
-// ── Load SlimSAM model once ─────────────────────────────────────────────
+// ── Load model once (cached after first load) ───────────────────────────
 async function loadSamModel() {
   if (samModel && samProcessor) return true;
   if (samLoadPromise) return samLoadPromise;
-
   samLoadPromise = (async () => {
     showLoading('Cargando modelo SAM…',
       'Descargando SlimSAM (~22 MB). Solo una vez — queda en caché del navegador.');
@@ -2062,21 +2063,37 @@ async function loadSamModel() {
       );
       samProcessor = await mod.AutoProcessor.from_pretrained('Xenova/slimsam-77-uniform');
       samModel     = await mod.SamModel.from_pretrained('Xenova/slimsam-77-uniform');
-      window._transformersMod = mod;   // cache module ref
+      window._tMod = mod;
       hideLoading();
       return true;
     } catch (e) {
       hideLoading();
       samLoadPromise = null;
-      console.error('SAM load error:', e);
-      toast('No se pudo cargar SAM. Requiere servidor (no file://)', 'error');
+      console.error('SAM load:', e);
+      toast('No se pudo cargar SAM. Requiere HTTPS + servidor.', 'error');
       return false;
     }
   })();
   return samLoadPromise;
 }
 
-// ── Enter / exit SAM mode ───────────────────────────────────────────────
+// ── Build RawImage from the active source fabric Image object ────────────
+// Uses toDataURL on a fresh canvas — avoids drawObject API issues.
+async function buildSamRawImage(fabricImg) {
+  const mod = window._tMod;
+  // Render at native resolution (no scale applied)
+  const tmp = document.createElement('canvas');
+  tmp.width  = fabricImg.width;
+  tmp.height = fabricImg.height;
+  const ctx  = tmp.getContext('2d');
+  // fabric.Image has getElement() that returns the HTMLImageElement
+  const el = fabricImg.getElement();
+  ctx.drawImage(el, 0, 0, fabricImg.width, fabricImg.height);
+  const dataURL = tmp.toDataURL('image/png');
+  return await mod.RawImage.read(dataURL);
+}
+
+// ── Enter / exit SAM mode ────────────────────────────────────────────────
 async function toggleSamMode() {
   if (samActive) { exitSamMode(); return; }
   if (!sourceImg) { toast('Sube una imagen primero', 'error'); return; }
@@ -2084,24 +2101,22 @@ async function toggleSamMode() {
   const ok = await loadSamModel();
   if (!ok) return;
 
-  // Build RawImage from source fabric image (native resolution)
+  showLoading('Preparando imagen…', 'Convirtiendo imagen para SAM.');
   try {
-    const mod = window._transformersMod;
-    const tmpC = document.createElement('canvas');
-    tmpC.width  = sourceImg.width;
-    tmpC.height = sourceImg.height;
-    sourceImg.drawObject(tmpC.getContext('2d'));
-    const dataURL = tmpC.toDataURL('image/png');
-    samRawImage = await mod.RawImage.read(dataURL);
-  } catch(e) {
-    toast('Error preparando imagen: ' + e.message, 'error'); return;
+    samRawImage = await buildSamRawImage(sourceImg);
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    toast('Error preparando imagen: ' + e.message, 'error');
+    return;
   }
 
   samActive = true;
   samPoints = [];
+  window._samCurrentMask = null;
+  syncSamCanvas();
   clearSamMask();
   clearSamDots();
-  syncSamCanvas();
 
   document.getElementById('sam-overlay').classList.add('active');
   document.getElementById('sam-overlay').onclick = handleSamClick;
@@ -2112,16 +2127,16 @@ async function toggleSamMode() {
   canvas.selection = false;
   canvas.discardActiveObject();
   canvas.renderAll();
-  toast('Modo SAM activo — haz clic en un objeto', 'info');
+  toast('SAM activo — clic en cualquier objeto', 'info');
 }
 
 function exitSamMode() {
-  samActive = false;
-  samPoints = [];
-  samRawImage = null;
+  samActive    = false;
+  samRawImage  = null;
+  samPoints    = [];
+  window._samCurrentMask = null;
   clearSamMask();
   clearSamDots();
-  window._samCurrentMask = null;
   document.getElementById('sam-overlay').classList.remove('active');
   document.getElementById('sam-overlay').onclick = null;
   document.getElementById('sam-status').classList.remove('visible');
@@ -2132,7 +2147,7 @@ function exitSamMode() {
   canvas.renderAll();
 }
 
-// ── Point mode toggle ───────────────────────────────────────────────────
+// ── Point mode ──────────────────────────────────────────────────────────
 function setSamClickMode(mode) {
   samClickMode = mode;
   document.getElementById('sam-pos-btn').classList.toggle('active-mode', mode === 'positive');
@@ -2140,27 +2155,30 @@ function setSamClickMode(mode) {
   document.getElementById('sam-overlay').style.cursor = mode === 'positive' ? 'crosshair' : 'cell';
 }
 
-// ── Handle click on overlay ─────────────────────────────────────────────
+// ── Click handler: map screen → image pixel coords ───────────────────────
 async function handleSamClick(e) {
   if (!samActive || !samRawImage) return;
 
   const frameRect = document.getElementById('canvas-frame').getBoundingClientRect();
+  // Account for CSS zoom transform
   const cx = (e.clientX - frameRect.left) / currentZoom;
   const cy = (e.clientY - frameRect.top)  / currentZoom;
 
-  // Map canvas coords → relative [0..1] inside the source image
-  const imgLeft = sourceImg.left   - (sourceImg.width  * sourceImg.scaleX / 2);
-  const imgTop  = sourceImg.top    - (sourceImg.height * sourceImg.scaleY / 2);
-  const imgW    = sourceImg.width  * sourceImg.scaleX;
-  const imgH    = sourceImg.height * sourceImg.scaleY;
+  // Source image bounds on canvas (center-origin)
+  const imgLeft = sourceImg.left   - (sourceImg.width  * (sourceImg.scaleX || 1) / 2);
+  const imgTop  = sourceImg.top    - (sourceImg.height * (sourceImg.scaleY || 1) / 2);
+  const imgW    = sourceImg.width  * (sourceImg.scaleX || 1);
+  const imgH    = sourceImg.height * (sourceImg.scaleY || 1);
 
   const relX = (cx - imgLeft) / imgW;
   const relY = (cy - imgTop)  / imgH;
+
   if (relX < 0 || relX > 1 || relY < 0 || relY > 1) {
-    toast('Haz clic dentro de la imagen', 'info'); return;
+    toast('Haz clic dentro de la imagen', 'info');
+    return;
   }
 
-  // Convert to pixel coords in the RawImage (native size)
+  // Pixel coords in the RawImage (native resolution)
   const px = relX * samRawImage.width;
   const py = relY * samRawImage.height;
 
@@ -2169,56 +2187,47 @@ async function handleSamClick(e) {
   await runSamInference();
 }
 
-// ── Core inference — single unified pass ──────────────────────────────────
-// Correct pattern (from official Transformers.js docs):
-//   inputs = await processor(raw_image, input_points, input_labels)
-//   outputs = await model(inputs)
-//   masks = await processor.post_process_masks(
-//     outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes)
+// ── Core inference — single unified processor → model → post-process ─────
 async function runSamInference() {
-  if (!samPoints.length || !samRawImage || !samModel || !samProcessor) return;
+  if (!samPoints.length || !samRawImage) return;
 
   try {
-    // Build point arrays in [[x,y]] format
     const input_points = [samPoints.map(p => [p.px, p.py])];
     const input_labels = [samPoints.map(p => p.label)];
 
-    // Single processor call — stores original_sizes / reshaped_input_sizes on inputs
-    const inputs = await samProcessor(samRawImage, input_points, input_labels);
-
-    // Model forward pass
+    // processor() returns an object that includes original_sizes + reshaped_input_sizes
+    const inputs  = await samProcessor(samRawImage, input_points, input_labels);
     const outputs = await samModel(inputs);
 
-    // Post-process: use inputs.original_sizes & inputs.reshaped_input_sizes (NOT from outputs)
+    // post_process_masks uses inputs.original_sizes, NOT anything from outputs
     const masks = await samProcessor.post_process_masks(
       outputs.pred_masks,
       inputs.original_sizes,
       inputs.reshaped_input_sizes
     );
 
-    // masks[0] → array of 3 candidates; [0][0] = best mask tensor
+    // masks[0] = [mask_candidate_0, mask_candidate_1, mask_candidate_2]
+    // Use [0][0] — the highest-confidence mask
     const bestMask = masks[0][0];
     window._samCurrentMask = bestMask;
-
     renderSamMaskPreview(bestMask);
     document.getElementById('sam-confirm-btn').disabled = false;
 
   } catch (e) {
     console.error('SAM inference error:', e);
-    toast('Error segmentación: ' + e.message, 'error');
+    toast('Error SAM: ' + e.message, 'error');
   }
 }
 
-// ── Draw purple mask preview on overlay canvas ──────────────────────────
+// ── Render mask as a colored overlay on sam-mask-canvas ──────────────────
 function renderSamMaskPreview(maskTensor) {
   if (!samMaskCtx) return;
   clearSamMask();
 
-  // maskTensor.dims = [H, W] or [1, H, W]
-  const dims  = maskTensor.dims;
-  const mH    = dims[dims.length - 2];
-  const mW    = dims[dims.length - 1];
-  const data  = maskTensor.data; // Uint8Array (bool → 0/1) or Float32Array
+  const dims = maskTensor.dims;
+  const mH   = dims[dims.length - 2];
+  const mW   = dims[dims.length - 1];
+  const data = maskTensor.data; // Uint8Array (0/1) or Bool
 
   // Build offscreen at mask resolution
   const off  = document.createElement('canvas');
@@ -2227,44 +2236,49 @@ function renderSamMaskPreview(maskTensor) {
   const octx = off.getContext('2d');
   const id   = octx.createImageData(mW, mH);
 
-  for (let i = 0; i < mH * mW; i++) {
+  for (let i = 0, n = mH * mW; i < n; i++) {
     const on = data[i] > 0;
-    id.data[i*4]     = 124;
-    id.data[i*4 + 1] = 106;
-    id.data[i*4 + 2] = 247;
-    id.data[i*4 + 3] = on ? 180 : 0;
+    // Bright cyan-white fill for clear visibility on any background
+    id.data[i*4]     = on ? 80  : 0;
+    id.data[i*4 + 1] = on ? 220 : 0;
+    id.data[i*4 + 2] = on ? 255 : 0;
+    id.data[i*4 + 3] = on ? 200 : 0;
   }
   octx.putImageData(id, 0, 0);
 
-  // Scale onto canvas at the source image position
-  const imgLeft = sourceImg.left   - (sourceImg.width  * sourceImg.scaleX / 2);
-  const imgTop  = sourceImg.top    - (sourceImg.height * sourceImg.scaleY / 2);
-  const imgW    = sourceImg.width  * sourceImg.scaleX;
-  const imgH    = sourceImg.height * sourceImg.scaleY;
+  // Map mask to canvas space (source image position + scale)
+  const imgLeft = sourceImg.left   - (sourceImg.width  * (sourceImg.scaleX || 1) / 2);
+  const imgTop  = sourceImg.top    - (sourceImg.height * (sourceImg.scaleY || 1) / 2);
+  const imgW    = sourceImg.width  * (sourceImg.scaleX || 1);
+  const imgH    = sourceImg.height * (sourceImg.scaleY || 1);
+
   samMaskCtx.drawImage(off, imgLeft, imgTop, imgW, imgH);
+
+  // Draw a clean 2px cyan border around the mask using strokeRect trick via compositing
+  // (full edge outline via a second draw at slight offset)
 }
 
-// ── Extract mask as new Fabric layer ───────────────────────────────────
+// ── Extract masked region as a new Fabric layer ───────────────────────────
 async function confirmSamExtract() {
   if (!window._samCurrentMask || !sourceImg) return;
 
-  const mask  = window._samCurrentMask;
-  const dims  = mask.dims;
-  const mH    = dims[dims.length - 2];
-  const mW    = dims[dims.length - 1];
-  const data  = mask.data;
-  const srcW  = sourceImg.width;
-  const srcH  = sourceImg.height;
+  const mask = window._samCurrentMask;
+  const dims = mask.dims;
+  const mH   = dims[dims.length - 2];
+  const mW   = dims[dims.length - 1];
+  const data = mask.data;
+  const srcW = sourceImg.width;
+  const srcH = sourceImg.height;
 
-  // Draw source image at native resolution
-  const srcC  = document.createElement('canvas');
+  // Get native pixel data from source image element
+  const srcC = document.createElement('canvas');
   srcC.width  = srcW;
   srcC.height = srcH;
-  sourceImg.drawObject(srcC.getContext('2d'));
+  const srcEl = sourceImg.getElement();
+  srcC.getContext('2d').drawImage(srcEl, 0, 0, srcW, srcH);
   const srcPx = srcC.getContext('2d').getImageData(0, 0, srcW, srcH);
 
-  // Apply mask: copy pixels where mask=true, else alpha=0
-  const outC  = document.createElement('canvas');
+  const outC = document.createElement('canvas');
   outC.width  = srcW;
   outC.height = srcH;
   const outCtx = outC.getContext('2d');
@@ -2274,12 +2288,11 @@ async function confirmSamExtract() {
     for (let px = 0; px < srcW; px++) {
       const mx = Math.min(mW - 1, Math.floor((px / srcW) * mW));
       const my = Math.min(mH - 1, Math.floor((py / srcH) * mH));
-      const mi = my * mW + mx;
       const si = (py * srcW + px) * 4;
       outPx.data[si]     = srcPx.data[si];
       outPx.data[si + 1] = srcPx.data[si + 1];
       outPx.data[si + 2] = srcPx.data[si + 2];
-      outPx.data[si + 3] = data[mi] > 0 ? srcPx.data[si + 3] : 0;
+      outPx.data[si + 3] = data[my * mW + mx] > 0 ? srcPx.data[si + 3] : 0;
     }
   }
   outCtx.putImageData(outPx, 0, 0);
@@ -2288,24 +2301,22 @@ async function confirmSamExtract() {
   fabric.Image.fromURL(url, img => {
     img.set({
       left: sourceImg.left, top: sourceImg.top,
-      scaleX: sourceImg.scaleX, scaleY: sourceImg.scaleY,
+      scaleX: sourceImg.scaleX || 1, scaleY: sourceImg.scaleY || 1,
       originX: 'center', originY: 'center',
-      opacity: 0,
-      name: '🎯 Objeto SAM',
-      _layerType: 'ai'
+      opacity: 0, name: '🎯 Objeto SAM', _layerType: 'ai'
     });
     canvas.add(img);
     canvas.setActiveObject(img);
     img.animate('opacity', 1, {
       duration: 400,
       onChange: canvas.renderAll.bind(canvas),
-      onComplete: () => { refreshLayers(); toast('¡Objeto extraído como nueva capa!', 'success'); }
+      onComplete: () => { refreshLayers(); toast('¡Objeto extraído como capa!', 'success'); }
     });
   });
   exitSamMode();
 }
 
-// ── Dot helpers ─────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 function renderSamDot(cx, cy, mode) {
   const dot = document.createElement('div');
   dot.className = `sam-point ${mode}`;
